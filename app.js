@@ -1,232 +1,245 @@
 (function () {
-  const { simplify, checkFraction, checkSimplified, checkPercent, LEVELS } = window.Logic;
-
+  const { generateRound } = window.Reto;
   const $ = (id) => document.getElementById(id);
-  const form = $('answers');
 
-  const state = {
-    levels: LEVELS.slice(),
-    index: 0,
-    solved: new Set(),
-    hints: 0,
-    draws: { total: 0, hits: 0 },
-    bag: [],
+  const POINTS = 100;
+  const state = { round: [], index: 0, score: 0, results: [], muted: false, wheelTurn: 0 };
+
+  // ---------- Sound (tiny WebAudio beeps, no files) ----------
+
+  let audio;
+  function beep(notes) {
+    if (state.muted) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      notes.forEach(([freq, start, dur]) => {
+        const osc = audio.createOscillator();
+        const gain = audio.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.15, audio.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(0.001, audio.currentTime + start + dur);
+        osc.connect(gain).connect(audio.destination);
+        osc.start(audio.currentTime + start);
+        osc.stop(audio.currentTime + start + dur);
+      });
+    } catch (_) { /* sound is optional */ }
+  }
+  const sounds = {
+    right: () => beep([[523, 0, 0.15], [659, 0.12, 0.15], [784, 0.24, 0.3]]),
+    wrong: () => beep([[220, 0, 0.25], [180, 0.2, 0.35]]),
+    tick: () => beep([[880, 0, 0.05]]),
+    win: () => beep([[523, 0, 0.2], [659, 0.15, 0.2], [784, 0.3, 0.2], [1047, 0.45, 0.5]]),
   };
 
-  // ---------- Drawings ----------
+  // ---------- Small render helpers ----------
 
-  const SHAPES = {
-    ball: (c) => `<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2"/><ellipse cx="14" cy="13" rx="5" ry="3.5" fill="#fff" opacity=".7"/></svg>`,
-    chip: (c) => `<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2"/><circle cx="20" cy="20" r="11" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="3"/></svg>`,
-    star: (c) => `<svg viewBox="0 0 40 40"><polygon points="20,2 25,15 39,15 28,24 32,38 20,30 8,38 12,24 1,15 15,15" fill="${c}" stroke="rgba(0,0,0,.3)" stroke-width="2" stroke-linejoin="round"/></svg>`,
-    candy: (c) => `<svg viewBox="0 0 48 40"><polygon points="2,8 14,20 2,32" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2" stroke-linejoin="round"/><polygon points="46,8 34,20 46,32" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2" stroke-linejoin="round"/><ellipse cx="24" cy="20" rx="12" ry="10" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2"/><path d="M18 14 Q24 20 18 26" stroke="#fff" stroke-width="2.5" fill="none" opacity=".6"/></svg>`,
-    triangle: (c) => `<svg viewBox="0 0 40 40"><polygon points="20,3 38,36 2,36" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2" stroke-linejoin="round"/></svg>`,
-    square: (c) => `<svg viewBox="0 0 40 40"><rect x="4" y="4" width="32" height="32" rx="3" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`,
-    circle: (c) => `<svg viewBox="0 0 40 40"><circle cx="20" cy="20" r="17" fill="${c}" stroke="rgba(0,0,0,.25)" stroke-width="2"/></svg>`,
-    emoji: (_, e) => `<span class="emoji">${e}</span>`,
-  };
-
-  function shuffle(list) {
-    const a = list.slice();
-    for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
+  function fractionHTML([n, d]) {
+    if (n === 0) return '0';
+    if (n === d) return '1';
+    return `<span class="frac"><b>${n}</b><b>${d}</b></span>`;
   }
 
-  function counts(level) {
-    const total = level.items.reduce((s, i) => s + i.count, 0);
-    const fav = level.items.filter((i) => i.target).reduce((s, i) => s + i.count, 0);
-    return { total, fav };
+  function optionHTML(q, opt) {
+    if (q.type === 'wheel' || q.type === 'dice') return fractionHTML(opt);
+    if (q.type === 'percent') return `${opt}%`;
+    return opt;
   }
 
-  // ---------- Surprise challenges ----------
+  const marbles = (bag) => bag.map((b) => `<span class="marble" style="background:${b.color}"></span>`).join('');
+  const candySVG = (c) => `<svg class="candy" viewBox="0 0 48 40"><polygon points="2,8 14,20 2,32" fill="${c}"/><polygon points="46,8 34,20 46,32" fill="${c}"/><ellipse cx="24" cy="20" rx="12" ry="10" fill="${c}"/><path d="M18 14 Q24 20 18 26" stroke="#fff" stroke-width="2.5" fill="none" opacity=".6"/></svg>`;
 
-  const RANDOM_COLORS = [
-    { hex: '#e53935', f: 'roja', m: 'rojo' },
-    { hex: '#fdd835', f: 'amarilla', m: 'amarillo' },
-    { hex: '#1e88e5', f: 'azul', m: 'azul' },
-    { hex: '#43a047', f: 'verde', m: 'verde' },
-    { hex: '#8e24aa', f: 'morada', m: 'morado' },
-    { hex: '#fb8c00', f: 'naranja', m: 'naranja' },
-  ];
-  const RANDOM_KINDS = [
-    { shape: 'ball', noun: 'bolita', art: 'una', g: 'f', container: 'jar' },
-    { shape: 'star', noun: 'estrella', art: 'una', g: 'f', container: 'box' },
-    { shape: 'chip', noun: 'ficha', art: 'una', g: 'f', container: 'jar' },
-    { shape: 'candy', noun: 'dulce', art: 'un', g: 'm', container: 'jar' },
-    { shape: 'square', noun: 'cuadrado', art: 'un', g: 'm', container: 'box' },
-  ];
-  const rand = (min, max) => min + Math.floor(Math.random() * (max - min + 1));
-
-  function randomLevel() {
-    const kind = RANDOM_KINDS[rand(0, RANDOM_KINDS.length - 1)];
-    const colors = shuffle(RANDOM_COLORS).slice(0, rand(2, 4));
-    const items = colors.map((c, i) => ({ shape: kind.shape, color: c.hex, count: rand(1, 4), target: i === 0 }));
-    return {
-      question: `¿Cuál es la probabilidad de sacar ${kind.art}`,
-      target: `${kind.noun} ${kind.g === 'f' ? colors[0].f : colors[0].m}`,
-      color: colors[0].hex === '#fdd835' ? '#f9a825' : colors[0].hex,
-      container: kind.container,
-      items,
+  function wheelSVG(sectors) {
+    const n = sectors.length;
+    const r = 100;
+    const point = (i) => {
+      const a = (i / n) * 2 * Math.PI - Math.PI / 2;
+      return `${110 + r * Math.cos(a)},${110 + r * Math.sin(a)}`;
     };
-  }
-
-  // ---------- Rendering ----------
-
-  function renderNav() {
-    const nav = $('levels');
-    nav.innerHTML = '';
-    state.levels.forEach((_, i) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'level-btn' + (state.solved.has(i) ? ' solved' : '');
-      b.textContent = i < LEVELS.length ? i + 1 : '🎁';
-      b.setAttribute('aria-label', `Situación ${i + 1}`);
-      b.setAttribute('aria-current', String(i === state.index));
-      b.addEventListener('click', () => go(i));
-      nav.appendChild(b);
-    });
-  }
-
-  function renderLevel() {
-    const level = state.levels[state.index];
-    $('card').hidden = false;
-    $('done').hidden = true;
-    $('badge').textContent = state.index < LEVELS.length ? state.index + 1 : '🎁';
-    $('question').innerHTML = `${level.question} <strong style="color:${level.color}">${level.target}</strong>?`;
-
-    const container = $('container');
-    container.className = `container ${level.container}`;
-    container.style.setProperty('--lid', ['#26a69a', '#7e57c2', '#ef5350', '#29b6f6'][state.index % 4]);
-
-    state.bag = shuffle(level.items.flatMap((it) => Array.from({ length: it.count }, () => it)));
-    const items = $('items');
-    items.style.setProperty('--cols', state.bag.length > 9 ? 4 : 3);
-    items.innerHTML = state.bag
-      .map((it) => `<div class="item">${SHAPES[it.shape](it.color, it.emoji)}</div>`)
+    const slices = sectors
+      .map((s, i) => `<path d="M110,110 L${point(i)} A${r},${r} 0 0,1 ${point(i + 1)} Z" fill="${s.color}" stroke="#fff" stroke-width="4"/>`)
       .join('');
-
-    form.reset();
-    form.querySelectorAll('.field').forEach((f) => {
-      f.classList.remove('ok', 'bad');
-      f.querySelector('.mark').textContent = '';
-    });
-    state.hints = 0;
-    state.draws = { total: 0, hits: 0 };
-    $('draws').textContent = '';
-    $('feedback').textContent = '';
-    $('next').hidden = true;
-    renderNav();
+    return `<svg viewBox="0 0 220 220" id="wheel"><circle cx="110" cy="110" r="106" fill="#241640"/>${slices}<circle cx="110" cy="110" r="14" fill="#fff" stroke="#241640" stroke-width="4"/></svg>`;
   }
 
-  function go(i) {
-    state.index = i;
-    renderLevel();
-  }
+  const PIPS = {
+    1: [[50, 50]], 2: [[28, 28], [72, 72]], 3: [[28, 28], [50, 50], [72, 72]],
+    4: [[28, 28], [72, 28], [28, 72], [72, 72]], 5: [[28, 28], [72, 28], [50, 50], [28, 72], [72, 72]],
+    6: [[28, 25], [72, 25], [28, 50], [72, 50], [28, 75], [72, 75]],
+  };
+  const dieSVG = (face) =>
+    `<svg class="die" id="die" viewBox="0 0 100 100"><rect x="4" y="4" width="92" height="92" rx="18" fill="#fff" stroke="#241640" stroke-width="5"/>${PIPS[face].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="8" fill="#ff4d6d"/>`).join('')}</svg>`;
 
-  // ---------- Answer checking ----------
+  // ---------- Scenes: each has a playful action to try the experiment ----------
 
-  const num = (name) => {
-    const raw = form.elements[name].value.trim().replace(',', '.');
-    return raw === '' ? NaN : Number(raw);
+  const SCENES = {
+    wheel(q, scene) {
+      state.wheelTurn = 0;
+      scene.innerHTML = `<div class="wheel-wrap"><div class="pointer"></div>${wheelSVG(q.sectors)}</div>
+        <button class="btn btn-small" type="button" data-act>🎡 Girar</button><p class="scene-note"></p>`;
+      return (note) => {
+        const n = q.sectors.length;
+        const i = Math.floor(Math.random() * n);
+        const sector = 360 / n;
+        const target = 360 - (i + 0.5) * sector;
+        const current = state.wheelTurn % 360;
+        state.wheelTurn += 1440 + ((target - current + 360) % 360);
+        $('wheel').style.transform = `rotate(${state.wheelTurn}deg)`;
+        note.textContent = 'Girando...';
+        setTimeout(() => {
+          note.textContent = q.sectors[i].target ? `¡Cayó en ${q.highlight.text}! 🎉` : `No cayó en ${q.highlight.text}.`;
+          sounds.tick();
+        }, 3000);
+      };
+    },
+    dice(q, scene) {
+      scene.innerHTML = `${dieSVG(5)}<button class="btn btn-small" type="button" data-act>🎲 Lanzar</button><p class="scene-note"></p>`;
+      return (note) => {
+        const face = 1 + Math.floor(Math.random() * 6);
+        const die = $('die');
+        die.classList.remove('roll');
+        void die.getBoundingClientRect(); // restart animation
+        die.classList.add('roll');
+        setTimeout(() => {
+          if (!die.isConnected) return; // player already moved to another question
+          die.outerHTML = dieSVG(face);
+          note.textContent = `Salió ${face}: ${q.event(face) ? '¡sí cumple! 🎉' : 'no cumple.'}`;
+          sounds.tick();
+        }, 800);
+      };
+    },
+    words(q, scene) {
+      scene.innerHTML = `<div class="bags"><div class="bag">${marbles(q.bag)}</div></div>
+        <button class="btn btn-small" type="button" data-act>✋ Sacar una</button><p class="scene-note"></p>`;
+      return drawFrom(q.bag, scene, '.marble');
+    },
+    percent(q, scene) {
+      scene.innerHTML = `<div class="bags"><div class="bag">${q.bag.map((b) => candySVG(b.color)).join('')}</div></div>
+        <button class="btn btn-small" type="button" data-act>✋ Sacar uno</button><p class="scene-note"></p>`;
+      return drawFrom(q.bag, scene, '.candy');
+    },
+    compare(q, scene) {
+      scene.innerHTML = `<div class="bags compare">
+        <div class="bag"><span class="bag-label">A</span>${marbles(q.bagA)}</div>
+        <div class="bag"><span class="bag-label">B</span>${marbles(q.bagB)}</div></div>`;
+      return null;
+    },
   };
 
-  function mark(field, ok) {
-    const el = form.querySelector(`[data-field="${field}"]`);
-    el.classList.toggle('ok', ok);
-    el.classList.toggle('bad', !ok);
-    el.querySelector('.mark').textContent = ok ? '✅' : '❌';
+  function drawFrom(bag, scene, selector) {
+    let hits = 0, total = 0;
+    return (note) => {
+      const i = Math.floor(Math.random() * bag.length);
+      const el = scene.querySelectorAll(selector)[i];
+      el.classList.remove('picked');
+      void el.getBoundingClientRect();
+      el.classList.add('picked');
+      total++;
+      if (bag[i].target) hits++;
+      note.textContent = `${bag[i].target ? '¡Salió! 🎉' : 'No salió.'} Llevas ${hits} de ${total}.`;
+      sounds.tick();
+    };
   }
 
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    const { fav, total } = counts(state.levels[state.index]);
-    const results = {
-      fraction: checkFraction(num('fnum'), num('fden'), fav, total),
-      simplified: checkSimplified(num('snum'), num('sden'), fav, total),
-      percent: checkPercent(num('pct'), fav, total),
-    };
-    Object.entries(results).forEach(([k, ok]) => mark(k, ok));
+  // ---------- Game flow ----------
 
-    const allOk = Object.values(results).every(Boolean);
-    if (allOk) {
-      state.solved.add(state.index);
-      $('feedback').textContent = '🎉 ¡Excelente! Todo está correcto.';
-      $('feedback').style.color = 'var(--ok)';
-      $('next').hidden = false;
-      renderNav();
-      celebrate();
+  function show(id) {
+    ['start', 'quiz', 'end'].forEach((s) => ($(s).hidden = s !== id));
+  }
+
+  function renderProgress() {
+    $('progress').innerHTML = Array.from({ length: 5 }, (_, i) => {
+      const cls = state.results[i] === true ? 'ok' : state.results[i] === false ? 'bad' : i === state.index ? 'now' : '';
+      return `<span class="dot ${cls}"></span>`;
+    }).join('');
+    $('score').textContent = state.score;
+  }
+
+  function startGame() {
+    state.round = generateRound();
+    state.index = 0;
+    state.score = 0;
+    state.results = [];
+    show('quiz');
+    renderQuestion();
+  }
+
+  function renderQuestion() {
+    const q = state.round[state.index];
+    $('qnum').textContent = `Pregunta ${state.index + 1} de 5`;
+    $('prompt').innerHTML = q.prompt.replace(q.highlight.text, `<mark style="color:${q.highlight.color}">${q.highlight.text}</mark>`);
+
+    const scene = $('scene');
+    const act = SCENES[q.type](q, scene);
+    const button = scene.querySelector('[data-act]');
+    if (act && button) button.addEventListener('click', () => act(scene.querySelector('.scene-note')));
+
+    const options = $('options');
+    options.innerHTML = q.options.map((o, i) => `<button class="option" type="button" data-i="${i}">${optionHTML(q, o)}</button>`).join('');
+    options.querySelectorAll('.option').forEach((b) => b.addEventListener('click', () => answer(Number(b.dataset.i))));
+
+    $('explain').hidden = true;
+    $('next').hidden = true;
+    $('quiz').classList.remove('screen');
+    void $('quiz').offsetWidth;
+    $('quiz').classList.add('screen');
+    renderProgress();
+  }
+
+  function answer(choice) {
+    const q = state.round[state.index];
+    const ok = choice === q.answer;
+    const buttons = $('options').querySelectorAll('.option');
+    buttons.forEach((b) => (b.disabled = true));
+    buttons[q.answer].classList.add('right');
+    if (!ok) buttons[choice].classList.add('wrong');
+
+    state.results[state.index] = ok;
+    if (ok) {
+      state.score += POINTS;
+      $('score').parentElement.classList.remove('bump');
+      void $('score').offsetWidth;
+      $('score').parentElement.classList.add('bump');
+      sounds.right();
+      celebrate(40);
     } else {
-      $('feedback').textContent = 'Casi... revisa las casillas con ❌. ¡Tú puedes!';
-      $('feedback').style.color = 'var(--bad)';
+      sounds.wrong();
     }
-  });
 
-  $('hint').addEventListener('click', () => {
-    const level = state.levels[state.index];
-    const { fav, total } = counts(level);
-    const [n, d] = simplify(fav, total);
-    const hints = [
-      `Cuenta todos los objetos: ese número va abajo (denominador).`,
-      `Ahora cuenta solo los de "${level.target}": ese número va arriba (numerador).`,
-      n === fav
-        ? `Para simplificar busca un número que divida arriba y abajo... ¡aquí no hay! Ya está simplificada.`
-        : `Para simplificar divide arriba y abajo entre ${fav / n}.`,
-      `Porcentaje: divide el numerador entre el denominador y multiplica por 100. Ej: ${n} ÷ ${d} × 100.`,
-    ];
-    $('feedback').textContent = '💡 ' + hints[state.hints % hints.length];
-    $('feedback').style.color = 'var(--ink)';
-    state.hints++;
-  });
+    const explain = $('explain');
+    explain.className = `explain ${ok ? 'ok' : 'bad'}`;
+    explain.textContent = `${ok ? '✅ ¡Correcto! ' : '❌ ¡Uy! '}${q.explain}`;
+    explain.hidden = false;
+    $('next').textContent = state.index === 4 ? 'Ver resultado 🏁' : 'Siguiente ➜';
+    $('next').hidden = false;
+    renderProgress();
+  }
 
-  $('next').addEventListener('click', () => {
-    const next = state.levels.findIndex((_, i) => !state.solved.has(i) && i > state.index);
-    const firstOpen = state.levels.findIndex((_, i) => !state.solved.has(i));
-    if (next !== -1) go(next);
-    else if (firstOpen !== -1) go(firstOpen);
-    else finish();
-  });
-
-  // ---------- Random draw (experimental probability) ----------
-
-  $('draw').addEventListener('click', () => {
-    const pick = Math.floor(Math.random() * state.bag.length);
-    const el = $('items').children[pick];
-    el.classList.remove('picked');
-    void el.offsetWidth; // restart the animation
-    el.classList.add('picked');
-
-    state.draws.total++;
-    if (state.bag[pick].target) state.draws.hits++;
-    const { total, hits } = state.draws;
-    const target = state.levels[state.index].target;
-    $('draws').textContent = `Sacaste "${target}" ${hits} de ${total} veces (${Math.round((hits / total) * 100)}%).`;
-  });
-
-  // ---------- End & extras ----------
+  function next() {
+    if (state.index < 4) {
+      state.index++;
+      renderQuestion();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      finish();
+    }
+  }
 
   function finish() {
-    $('card').hidden = true;
-    $('done').hidden = false;
-    celebrate(120);
+    const right = state.results.filter(Boolean).length;
+    const stars = right === 5 ? 3 : right >= 3 ? 2 : right >= 1 ? 1 : 0;
+    $('stars').innerHTML = [0, 1, 2].map((i) => `<span class="${i < stars ? '' : 'off'}" style="animation-delay:${i * 0.25}s">⭐</span>`).join('');
+    $('endTitle').textContent = ['¡Sigue practicando!', '¡Buen intento!', '¡Muy bien!', '¡Eres experta en probabilidad!'][stars];
+    $('endText').textContent = `Acertaste ${right} de 5 preguntas y ganaste ${state.score} puntos.`;
+    state.index = 5;
+    renderProgress();
+    show('end');
+    if (stars >= 2) { sounds.win(); celebrate(140); }
   }
 
-  $('random').addEventListener('click', () => {
-    state.levels.push(randomLevel());
-    go(state.levels.length - 1);
-  });
-
-  $('restart').addEventListener('click', () => {
-    state.levels = LEVELS.slice();
-    state.solved.clear();
-    go(0);
-  });
-
-  function celebrate(amount = 60) {
+  function celebrate(amount) {
     const box = $('confetti');
-    const colors = ['#ff5c8a', '#ffd60a', '#3ccf6e', '#29b6f6', '#7c4dff', '#ff9f1c'];
+    const colors = ['#ff4d6d', '#ffbe0b', '#38d39f', '#3a86ff', '#9d4edd', '#ff8c42'];
     for (let i = 0; i < amount; i++) {
       const p = document.createElement('i');
       p.style.left = Math.random() * 100 + 'vw';
@@ -238,5 +251,13 @@
     }
   }
 
-  go(0);
+  $('play').addEventListener('click', startGame);
+  $('again').addEventListener('click', startGame);
+  $('next').addEventListener('click', next);
+  $('sound').addEventListener('click', () => {
+    state.muted = !state.muted;
+    $('sound').textContent = state.muted ? '🔇' : '🔊';
+  });
+
+  renderProgress();
 })();

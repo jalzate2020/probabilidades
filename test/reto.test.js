@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { generateRound, mulberry32, fractionValue } = require('../reto/logic.js');
+const { generateRound, mulberry32, fractionValue } = require('../logic.js');
 
 const seeds = Array.from({ length: 200 }, (_, i) => i + 1);
 

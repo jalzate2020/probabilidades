@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { gcd, simplify, checkFraction, checkSimplified, checkPercent, LEVELS } = require('../logic.js');
+const { gcd, simplify, checkFraction, checkSimplified, checkPercent, LEVELS } = require('../juego1/logic.js');
 
 test('gcd and simplify reduce fractions to lowest terms', () => {
   assert.equal(gcd(4, 10), 2);

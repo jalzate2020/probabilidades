@@ -3,80 +3,51 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Juego de Probabilidades</title>
-  <meta name="description" content="Juego de probabilidades para grado 5: fracción, fracción simplificada y porcentaje.">
+  <title>Reto de la Suerte</title>
+  <meta name="description" content="Juego de probabilidades para grado 5: ruleta, dados y bolsas sorpresa. 5 preguntas nuevas en cada partida.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="sky" aria-hidden="true"></div>
+
   <main class="page">
-    <header class="header">
-      <h1 class="title" aria-label="Probabilidades">
-        <span>P</span><span>R</span><span>O</span><span>B</span><span>A</span><span>B</span><span>I</span><span>L</span><span>I</span><span>D</span><span>A</span><span>D</span><span>E</span><span>S</span>
-      </h1>
-      <p class="banner">Observa cada situación, cuenta y escribe la probabilidad indicada.</p>
-      <p><a class="btn btn-game2" href="reto/">🎡 Juego 2: Reto de la Suerte ➜</a></p>
+    <header class="topbar">
+      <a class="chip" href="juego1/">Juego 1 ➜</a>
+      <div class="progress" id="progress" aria-label="Progreso"></div>
+      <div class="score">⭐ <span id="score">0</span></div>
+      <button class="chip" id="sound" type="button" aria-label="Sonido">🔊</button>
     </header>
 
-    <nav class="levels" id="levels" aria-label="Situaciones"></nav>
-
-    <section class="card" id="card">
-      <div class="question">
-        <span class="badge" id="badge">1</span>
-        <h2 id="question"></h2>
+    <!-- Start -->
+    <section class="screen start" id="start">
+      <div class="logo">
+        <span class="logo-icons">🎡🎲🎒</span>
+        <h1>Reto de la <em>Suerte</em></h1>
       </div>
+      <p class="lead">5 preguntas de probabilidad. ¡Cada partida es diferente!</p>
+      <button class="btn btn-big" id="play" type="button">¡Jugar!</button>
+    </section>
 
-      <div class="play">
-        <div class="stage">
-          <div class="container" id="container"><div class="items" id="items"></div></div>
-          <button class="btn btn-draw" id="draw" type="button">🎲 ¡Saca una al azar!</button>
-          <p class="draws" id="draws"></p>
-        </div>
-
-        <form class="answers" id="answers" autocomplete="off">
-          <div class="field" data-field="fraction">
-            <label>Fracción</label>
-            <div class="frac">
-              <input inputmode="numeric" name="fnum" aria-label="Numerador">
-              <span class="bar"></span>
-              <input inputmode="numeric" name="fden" aria-label="Denominador">
-            </div>
-            <span class="mark" aria-live="polite"></span>
-          </div>
-          <div class="field" data-field="simplified">
-            <label>Fracción simplificada</label>
-            <div class="frac">
-              <input inputmode="numeric" name="snum" aria-label="Numerador simplificado">
-              <span class="bar"></span>
-              <input inputmode="numeric" name="sden" aria-label="Denominador simplificado">
-            </div>
-            <span class="mark" aria-live="polite"></span>
-          </div>
-          <div class="field" data-field="percent">
-            <label>Porcentaje</label>
-            <div class="pct"><input inputmode="decimal" name="pct" aria-label="Porcentaje"><span>%</span></div>
-            <span class="mark" aria-live="polite"></span>
-          </div>
-
-          <div class="actions">
-            <button class="btn btn-check" type="submit">Comprobar</button>
-            <button class="btn btn-hint" id="hint" type="button">💡 Pista</button>
-          </div>
-          <p class="feedback" id="feedback" aria-live="polite"></p>
-          <button class="btn btn-next" id="next" type="button" hidden>Siguiente ➜</button>
-        </form>
+    <!-- Question -->
+    <section class="screen" id="quiz" hidden>
+      <div class="qcard">
+        <p class="qnum" id="qnum"></p>
+        <h2 class="prompt" id="prompt"></h2>
+        <div class="scene" id="scene"></div>
+        <div class="options" id="options"></div>
+        <div class="explain" id="explain" hidden></div>
+        <button class="btn btn-big" id="next" type="button" hidden>Siguiente ➜</button>
       </div>
     </section>
 
-    <section class="card done" id="done" hidden>
-      <div class="trophy">🏆</div>
-      <h2>¡Lo lograste!</h2>
-      <p>Resolviste las 8 situaciones de probabilidad.</p>
-      <div class="actions center">
-        <button class="btn btn-check" id="random" type="button">🎁 Reto sorpresa</button>
-        <button class="btn btn-hint" id="restart" type="button">🔁 Empezar de nuevo</button>
-      </div>
+    <!-- End -->
+    <section class="screen end" id="end" hidden>
+      <div class="stars" id="stars"></div>
+      <h2 id="endTitle"></h2>
+      <p class="lead" id="endText"></p>
+      <button class="btn btn-big" id="again" type="button">🔁 Jugar otra vez</button>
     </section>
 
     <footer class="footer">Exposición de Estadística · Grado 5</footer>

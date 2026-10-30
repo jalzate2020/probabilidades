@@ -1,11 +1,15 @@
 # Juego de Probabilidades 🎲
 
-Juego educativo para grado 5: observa cada situación, cuenta los objetos y escribe la
-**fracción**, la **fracción simplificada** y el **porcentaje**.
+Juegos educativos de probabilidad para grado 5.
 
 **Jugar:** https://jalzate2020.github.io/probabilidades/
 
 ## Juego 1: Probabilidades
+
+**Jugar:** https://jalzate2020.github.io/probabilidades/juego1/
+
+Observa cada situación, cuenta los objetos y escribe la **fracción**, la
+**fracción simplificada** y el **porcentaje**.
 
 
 - 8 situaciones (bolitas, estrellas, carritos, fichas, dulces, figuras y pelotas).
@@ -15,7 +19,7 @@ Juego educativo para grado 5: observa cada situación, cuenta los objetos y escr
 
 ## Juego 2: Reto de la Suerte 🎡
 
-**Jugar:** https://jalzate2020.github.io/probabilidades/reto/
+**Jugar:** https://jalzate2020.github.io/probabilidades/
 
 5 preguntas nuevas en cada partida, con opciones para tocar, puntos, sonidos y estrellas:
 
